@@ -1,0 +1,26 @@
+{
+  "name": "semantic-image-search",
+  "version": "0.1.0",
+  "main": "process-data.js",
+  "scripts": {
+    "process": "node process-data.js",
+    "serve": "npx http-server public -o"
+  },
+  "type": "module",
+  "keywords": [
+    "semantic-search",
+    "clip",
+    "image-search",
+    "transformers",
+    "machine-learning",
+    "unsplash"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "A semantic image search web application using CLIP embeddings and Unsplash data",
+  "dependencies": {
+    "@huggingface/transformers": "^3.4.0",
+    "axios": "^1.8.3",
+    "csv-parser": "^3.2.0"
+  }
+}
