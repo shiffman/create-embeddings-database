@@ -21,7 +21,7 @@ node process-data.js
 This will:
 
 - Process images from the Unsplash dataset
-- Generate CLIP embeddings for each image (mode: [clip-vit-base-patch16](https://huggingface.co/Xenova/clip-vit-base-patch16))
+- Generate CLIP embeddings for each image (model: [clip-vit-base-patch16](https://huggingface.co/Xenova/clip-vit-base-patch16), with the Transformers.js `image-feature-extraction` pipeline)
 - Save embeddings to `embeddings/embeddings.bin`
 - Save image metadata to `embeddings/photo.json`
 
@@ -54,7 +54,7 @@ let flattened = embeddings.flat();
 const embeddingsBuffer = Buffer.from(new Float32Array(flattened).buffer);
 
 // Write the binary data to a file
-fs.writeFileSync('public/embeddings/embeddings.bin', embeddingsBuffer);
+fs.writeFileSync('embeddings/embeddings.bin', embeddingsBuffer);
 ```
 
 ### Loading Embeddings

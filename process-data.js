@@ -3,7 +3,10 @@ import csv from 'csv-parser';
 import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { AutoProcessor, CLIPVisionModelWithProjection, RawImage } from '@huggingface/transformers';
+import { pipeline, env, LogLevel } from '@huggingface/transformers';
+
+// Only show Transformers.js errors, not warnings, so the progress below stays readable
+env.logLevel = LogLevel.ERROR;
 
 // Get directory path
 const __filename = fileURLToPath(import.meta.url);
@@ -44,18 +47,23 @@ async function downloadImage(url, filename) {
 // if partially downloaded try
 // rm -rf node_modules/@huggingface/transformers/.cache
 
-const processor = await AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch16');
-const vision_model = await CLIPVisionModelWithProjection.from_pretrained(
-  'Xenova/clip-vit-base-patch16',
-  {
-    // device: 'webgpu',
-    dtype: 'fp32',
-    progress_callback: (x) => process.stdout.write(x.status + ' ' + x.progress + '\r'),
-  }
-);
+// The image-feature-extraction pipeline gives CLIP's image embedding (512 numbers)
+console.log('Loading CLIP (Xenova/clip-vit-base-patch16)');
+const extractor = await pipeline('image-feature-extraction', 'Xenova/clip-vit-base-patch16', {
+  // device: 'webgpu',
+  dtype: 'fp32',
+  // Show the download of each model file on one line
+  progress_callback: (x) => {
+    if (x.status === 'progress') {
+      log(`Loading ${x.file}: ${x.progress.toFixed(0)}%`);
+    }
+  },
+});
+log('Model ready\n');
 
 const photosTSV = await readTSV('unsplash/photos.tsv000');
-console.log(`Processing ${photosTSV.length} photos from unsplash`);
+console.log(`Processing ${photosTSV.length} photos from Unsplash`);
+const startTime = Date.now();
 
 let photos = [];
 let embeddings = [];
@@ -63,33 +71,36 @@ let embeddings = [];
 for (let i = 0; i < photosTSV.length; i++) {
   const photo = photosTSV[i];
 
-  // Adding URL parameter ?w=512&q=80 to resize and compress the image
+  // Adding URL parameters to resize and compress the image
   const imageUrl = `${photo.photo_image_url}?w=1024&h=1024&fit=max&q=90`;
   const filename = `${photo.photo_id}.jpg`;
-  const filePath = path.resolve(__dirname, '/images', filename);
+  const filePath = path.resolve(__dirname, 'images', filename);
 
   // Only download the image if it doesn't exist
   // No need to actually down the images but good to have the option
   // if (!fs.existsSync(filePath)) {
-  //   log(`Downloading ${filename}: ${i + 1}/${photos.length}\r`);
+  //   log(`Downloading ${filename}: ${i + 1}/${photosTSV.length}\r`);
   //   await downloadImage(imageUrl, filename);
   // }
 
   // Process the embedding
   try {
-    const image = await RawImage.read(imageUrl);
-    const image_inputs = await processor(image);
-    const { image_embeds } = await vision_model(image_inputs);
-    const image_embeddings = image_embeds.normalize().tolist();
+    const output = await extractor(imageUrl);
+    const image_embeddings = output.normalize().tolist();
 
     // Add to arrays
     embeddings.push(image_embeddings[0]);
     photos.push({ id: photo.photo_id, url: photo.photo_image_url });
-
-    log(`Computed embeddings: ${i + 1}/${photosTSV.length}\r`);
   } catch (e) {
-    console.error(e);
+    // If an image can't be loaded, skip it and keep going
+    log(`Skipped ${photo.photo_id}: ${e.message}\n`);
   }
+
+  // Show progress on one line, with an estimate of the time left
+  const done = i + 1;
+  const secondsPerPhoto = (Date.now() - startTime) / 1000 / done;
+  const minutesLeft = (secondsPerPhoto * (photosTSV.length - done)) / 60;
+  log(`Computed embeddings: ${done}/${photosTSV.length}, about ${minutesLeft.toFixed(0)} minutes left`);
 
   // Save every 500 cycles since it takes a long time to run
   if ((i + 1) % 500 == 0) {
@@ -99,6 +110,7 @@ for (let i = 0; i < photosTSV.length; i++) {
 
 // If we get to the end
 writeData();
+console.log('Done!');
 
 function writeData() {
   // Step 1: Flatten the nested array of embeddings into one long array
@@ -123,10 +135,11 @@ function writeData() {
   // This is kept as JSON since it's smaller and we need the structure
   fs.writeFileSync('embeddings/photo.json', JSON.stringify(photos));
 
-  console.log(`Saved ${embeddings.length} embeddings and photo IDs.`);
+  log(`Saved ${embeddings.length} embeddings to embeddings/embeddings.bin and photo info to embeddings/photo.json\n`);
 }
 
-// Helper function to log progress
+// Write a message on the current line, replacing what was there
+// (end the message with \n to keep it and move to the next line)
 function log(message) {
   process.stdout.clearLine();
   process.stdout.cursorTo(0);

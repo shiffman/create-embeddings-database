@@ -19,7 +19,7 @@
   "license": "ISC",
   "description": "A semantic image search web application using CLIP embeddings and Unsplash data",
   "dependencies": {
-    "@huggingface/transformers": "^3.4.0",
+    "@huggingface/transformers": "^4.3.2",
     "axios": "^1.8.3",
     "csv-parser": "^3.2.0"
   }
